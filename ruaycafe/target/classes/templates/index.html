@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>รวยคาเฟ่ POS</title>
+    <link rel="stylesheet" th:href="@{/css/style.css}">
+</head>
+<body>
+<div class="container">
+    <div class="menu-section">
+        <div class="menu-header">
+            <h1>☕ รวยคาเฟ่</h1>
+            <div style="display: flex; align-items: center; gap: 20px;">
+                <div style="color: #999; font-size: 14px;">
+                    วันที่: <span th:text="${#dates.format(#dates.createNow(), 'dd/MM/yyyy')}"></span>
+                </div>
+                <button class="btn-edit-menu" onclick="toggleEditMode()">
+                    <span>✏️</span>
+                    <span id="editModeText">แก้ไขเมนู</span>
+                </button>
+            </div>
+        </div>
+
+        <div class="menu-grid" id="menuGrid">
+            <div class="menu-item" th:each="p : ${products}"
+                 th:attr="data-id=${p.id}, data-name=${p.name}, data-price=${p.price}">
+                <div class="edit-badge">✏️ แก้ไข</div>
+                <img th:src="@{${p.image}}" th:alt="${p.name}">
+                <div class="menu-item-info">
+                    <div class="menu-item-name" th:text="${p.name}">ชื่อสินค้า</div>
+                    <div class="menu-item-price" th:text="'฿' + ${p.price}">฿0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="order-section">
+        <div class="order-header">
+            <h2>รายการสั่งซื้อ</h2>
+            <div class="order-number">Order #001</div>
+        </div>
+
+        <div class="order-items" id="orderItems">
+            <div class="empty-cart" th:if="${cart.size() == 0}">
+                <div class="empty-cart-icon">🛒</div>
+                <div>ยังไม่มีรายการสั่งซื้อ</div>
+            </div>
+
+            <div th:if="${cart.size() > 0}">
+                <div class="order-item" th:each="c : ${cart}">
+                    <div class="order-item-info">
+                        <div class="order-item-name" th:text="${c.name}">ชื่อสินค้า</div>
+                        <div class="order-item-price" th:text="'฿' + ${c.price} + ' x ' + ${c.qty}">฿0 x 1</div>
+                    </div>
+                    <div class="quantity-controls">
+                        <span class="quantity" th:text="${c.qty}">1</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="order-summary">
+            <div class="summary-row">
+                <span>รวมรายการ (<span th:text="${cart.size()}">0</span> รายการ)</span>
+                <span th:text="'฿' + ${#numbers.formatDecimal(sum, 1, 2)}">฿0</span>
+            </div>
+            <div class="summary-row">
+                <span>ส่วนลด</span>
+                <span>฿0</span>
+            </div>
+            <div class="summary-row total">
+                <span>รวมทั้งหมด</span>
+                <span th:text="'฿' + ${#numbers.formatDecimal(sum, 1, 2)}">฿0</span>
+            </div>
+            <div class="action-buttons">
+                <form method="post" th:action="@{/cart/clear}" style="display: contents;">
+                    <button type="submit" class="btn btn-clear">ล้างรายการ</button>
+                </form>
+                <button class="btn btn-checkout" onclick="checkout()">ชำระเงิน</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal for editing product -->
+<div id="editModal" class="modal">
+    <div class="modal-content">
+        <div class="modal-header">แก้ไขเมนู</div>
+        <form id="editForm">
+            <input type="hidden" id="editProductId">
+            <div class="form-group">
+                <label for="editName">ชื่อสินค้า</label>
+                <input type="text" id="editName" required>
+            </div>
+            <div class="form-group">
+                <label for="editPrice">ราคา (฿)</label>
+                <input type="number" id="editPrice" step="0.01" required>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" class="btn-modal btn-cancel" onclick="closeModal()">ยกเลิก</button>
+                <button type="submit" class="btn-modal btn-save">บันทึก</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    let editMode = false;
+
+    function toggleEditMode() {
+        editMode = !editMode;
+        const btn = document.querySelector('.btn-edit-menu');
+        const btnText = document.getElementById('editModeText');
+        const menuGrid = document.getElementById('menuGrid');
+
+        if (editMode) {
+            btn.style.background = 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)';
+            btnText.textContent = 'ออกจากโหมดแก้ไข';
+            menuGrid.classList.add('edit-mode');
+
+            // Change click handlers
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.onclick = function() {
+                    openEditModal(this);
+                };
+            });
+        } else {
+            btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
+            btnText.textContent = 'แก้ไขเมนู';
+            menuGrid.classList.remove('edit-mode');
+
+            // Restore original click handlers
+            document.querySelectorAll('.menu-item').forEach(item => {
+                item.onclick = function() {
+                    addToCart(this.getAttribute('data-id'));
+                };
+            });
+        }
+    }
+
+    function openEditModal(itemElement) {
+        const id = itemElement.getAttribute('data-id');
+        const name = itemElement.getAttribute('data-name');
+        const price = itemElement.getAttribute('data-price');
+
+        document.getElementById('editProductId').value = id;
+        document.getElementById('editName').value = name;
+        document.getElementById('editPrice').value = price;
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    document.getElementById('editForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const id = document.getElementById('editProductId').value;
+        const name = document.getElementById('editName').value;
+        const price = document.getElementById('editPrice').value;
+
+        try {
+            const response = await fetch('/api/products/' + id, {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ name, price })
+            });
+
+            if (response.ok) {
+                alert('แก้ไขเมนูสำเร็จ!');
+                closeModal();
+                location.reload();
+            } else {
+                alert('เกิดข้อผิดพลาดในการแก้ไขเมนู');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            alert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
+        }
+    });
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+        const modal = document.getElementById('editModal');
+        if (event.target == modal) {
+            closeModal();
+        }
+    };
+
+    // Add to cart function
+    async function addToCart(productId) {
+        if (editMode) return;
+
+        const res = await fetch('/cart/add', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+            body: new URLSearchParams({productId: productId})
+        });
+        const data = await res.json();
+        if(data.ok){
+            location.reload();
+        } else {
+            alert(data.msg || 'เกิดข้อผิดพลาด');
+        }
+    }
+
+    // Checkout function
+    async function checkout() {
+        const res = await fetch('/checkout', {method: 'POST'});
+        const data = await res.json();
+        if(data.ok){
+            alert('ชำระเงินสำเร็จ!\nยอดรวม: ฿' + data.total);
+            location.reload();
+        } else {
+            alert(data.msg || 'ไม่สามารถชำระเงินได้');
+        }
+    }
+
+    // Initialize click handlers on page load
+    document.addEventListener('DOMContentLoaded', function() {
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.onclick = function() {
+                addToCart(this.getAttribute('data-id'));
+            };
+        });
+    });
+</script>
+</body>
+</html>
