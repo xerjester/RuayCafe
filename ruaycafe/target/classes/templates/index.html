@@ -3,231 +3,252 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>รวยคาเฟ่ POS</title>
-    <link rel="stylesheet" th:href="@{/css/style.css}">
+    <title>รวยคาเฟ่ POS - Startup Edition</title>
+    <link rel="stylesheet" type="text/css" th:href="@{/css/style.css}" />
 </head>
 <body>
 <div class="container">
     <div class="menu-section">
-        <div class="menu-header">
-            <h1>☕ รวยคาเฟ่</h1>
-            <div style="display: flex; align-items: center; gap: 20px;">
-                <div style="color: #999; font-size: 14px;">
-                    วันที่: <span th:text="${#dates.format(#dates.createNow(), 'dd/MM/yyyy')}"></span>
-                </div>
-                <button class="btn-edit-menu" onclick="toggleEditMode()">
-                    <span>✏️</span>
-                    <span id="editModeText">แก้ไขเมนู</span>
-                </button>
-            </div>
-        </div>
-
         <div class="menu-grid" id="menuGrid">
-            <div class="menu-item" th:each="p : ${products}"
-                 th:attr="data-id=${p.id}, data-name=${p.name}, data-price=${p.price}">
-                <div class="edit-badge">✏️ แก้ไข</div>
+            <!-- Menu items -->
+            <div class="menu-item" th:each="p : ${products}" th:attr="data-id=${p.id}" onclick="openCustomizeModal(this)">
                 <img th:src="@{${p.image}}" th:alt="${p.name}">
                 <div class="menu-item-info">
                     <div class="menu-item-name" th:text="${p.name}">ชื่อสินค้า</div>
                     <div class="menu-item-price" th:text="'฿' + ${p.price}">฿0</div>
+                    <div class="menu-item-prices">
+                        <span class="menu-item-cost" th:text="'ต้นทุน ฿' + ${p.calculateCost()}">ต้นทุน ฿0</span>
+                        <span class="menu-item-profit" th:text="'+฿' + ${p.calculateProfit()}">+฿0</span>
+                    </div>
+                </div>
+                <div class="menu-item-edit">
+                    <button type="button" class="btn-edit">แก้ไข</button>
+                    <button type="button" class="btn-delete">ลบ</button>
+                </div>
+            </div>
+
+            <!-- Add menu button -->
+            <div class="menu-add-item" onclick="openAddMenuModal()">
+                <div class="add-item-content">
+                    <div style="font-size: 36px; color: #667eea;">＋</div>
+                    <div style="margin-top: 8px; font-weight: 600; color: #2c3e50;">เพิ่มเมนู</div>
                 </div>
             </div>
         </div>
     </div>
 
+    <!-- Order Section -->
     <div class="order-section">
         <div class="order-header">
             <h2>รายการสั่งซื้อ</h2>
-            <div class="order-number">Order #001</div>
+            <div class="order-number">Order #<span id="orderNumber">001</span></div>
         </div>
 
         <div class="order-items" id="orderItems">
-            <div class="empty-cart" th:if="${cart.size() == 0}">
-                <div class="empty-cart-icon">🛒</div>
+            <div class="empty-cart">
+                <div style="font-size: 60px; margin-bottom: 15px;">🛒</div>
                 <div>ยังไม่มีรายการสั่งซื้อ</div>
-            </div>
-
-            <div th:if="${cart.size() > 0}">
-                <div class="order-item" th:each="c : ${cart}">
-                    <div class="order-item-info">
-                        <div class="order-item-name" th:text="${c.name}">ชื่อสินค้า</div>
-                        <div class="order-item-price" th:text="'฿' + ${c.price} + ' x ' + ${c.qty}">฿0 x 1</div>
-                    </div>
-                    <div class="quantity-controls">
-                        <span class="quantity" th:text="${c.qty}">1</span>
-                    </div>
-                </div>
+                <div style="font-size: 12px; color: #bbb; margin-top: 8px;">คลิกเมนูเพื่อเพิ่มรายการ</div>
             </div>
         </div>
 
         <div class="order-summary">
             <div class="summary-row">
-                <span>รวมรายการ (<span th:text="${cart.size()}">0</span> รายการ)</span>
-                <span th:text="'฿' + ${#numbers.formatDecimal(sum, 1, 2)}">฿0</span>
+                <span>รวมรายการ (<span id="itemCount">0</span>)</span>
+                <span id="subtotal">฿0</span>
             </div>
             <div class="summary-row">
                 <span>ส่วนลด</span>
-                <span>฿0</span>
+                <span id="discount">฿0</span>
+            </div>
+            <div class="summary-row">
+                <span>ต้นทุนรวม</span>
+                <span id="totalCost">฿0</span>
+            </div>
+            <div class="summary-row profit">
+                <span>💰 กำไร</span>
+                <span id="totalProfit">฿0</span>
             </div>
             <div class="summary-row total">
                 <span>รวมทั้งหมด</span>
-                <span th:text="'฿' + ${#numbers.formatDecimal(sum, 1, 2)}">฿0</span>
+                <span id="total">฿0</span>
             </div>
-            <div class="action-buttons">
-                <form method="post" th:action="@{/cart/clear}" style="display: contents;">
-                    <button type="submit" class="btn btn-clear">ล้างรายการ</button>
-                </form>
-                <button class="btn btn-checkout" onclick="checkout()">ชำระเงิน</button>
-            </div>
+            <button class="btn-checkout" onclick="checkout()">ชำระเงิน</button>
         </div>
     </div>
 </div>
 
-<!-- Modal for editing product -->
-<div id="editModal" class="modal">
+  <!-- Customize Modal -->
+    <div id="customizeModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="modalProductName">ชื่อเมนู</h3>
+                <div style="font-size: 14px; opacity: 0.9;">ปรับแต่งตามใจคุณ</div>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Size Selection -->
+                <div class="customize-section">
+                    <h4>🥤 ขนาด</h4>
+                    <div class="size-options">
+                        <div class="size-option" data-size="small" onclick="selectSize('small')">
+                            <div style="font-size: 20px;">S</div>
+                            <div style="font-size: 12px; margin-top: 5px;">เล็ก</div>
+                            <div style="font-size: 12px; color: #667eea;">+฿0</div>
+                        </div>
+                        <div class="size-option active" data-size="medium" onclick="selectSize('medium')">
+                            <div style="font-size: 20px;">M</div>
+                            <div style="font-size: 12px; margin-top: 5px;">กลาง</div>
+                            <div style="font-size: 12px; color: #667eea;">+฿10</div>
+                        </div>
+                        <div class="size-option" data-size="large" onclick="selectSize('large')">
+                            <div style="font-size: 20px;">L</div>
+                            <div style="font-size: 12px; margin-top: 5px;">ใหญ่</div>
+                            <div style="font-size: 12px; color: #667eea;">+฿20</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Sweet Level -->
+                <div class="customize-section">
+                    <h4>🍯 ระดับความหวาน</h4>
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>ไม่หวาน</span>
+                            <span id="sweetValue">100%</span>
+                        </div>
+                        <input type="range" class="slider" id="sweetLevel" min="0" max="100" value="100" 
+                               oninput="updateSliderValue('sweetValue', this.value)">
+                    </div>
+                </div>
+
+                <!-- Ice Level -->
+                <div class="customize-section">
+                    <h4>🧊 ระดับน้ำแข็ง</h4>
+                    <div class="slider-container">
+                        <div class="slider-label">
+                            <span>ไม่ใส่</span>
+                            <span id="iceValue">100%</span>
+                        </div>
+                        <input type="range" class="slider" id="iceLevel" min="0" max="100" value="100"
+                               oninput="updateSliderValue('iceValue', this.value)">
+                    </div>
+                </div>
+
+                <!-- Add-ons -->
+                <div class="customize-section">
+                    <h4>➕ ส่วนผสมเพิ่มเติม</h4>
+                    <div class="addon-list" id="addonList">
+                        <div class="addon-item" onclick="toggleAddon(this, 1)">
+                            <input type="checkbox" class="addon-checkbox" data-addon-id="1">
+                            <div class="addon-info">
+                                <div class="addon-name">ช็อตเพิ่ม (Espresso)</div>
+                                <div style="font-size: 12px; color: #999;">เพิ่มความเข้มข้น</div>
+                            </div>
+                            <div class="addon-price">+฿20</div>
+                        </div>
+                        <div class="addon-item" onclick="toggleAddon(this, 2)">
+                            <input type="checkbox" class="addon-checkbox" data-addon-id="2">
+                            <div class="addon-info">
+                                <div class="addon-name">วิปครีม</div>
+                                <div style="font-size: 12px; color: #999;">หอมนุ่มลิ้น</div>
+                            </div>
+                            <div class="addon-price">+฿15</div>
+                        </div>
+                        <div class="addon-item" onclick="toggleAddon(this, 3)">
+                            <input type="checkbox" class="addon-checkbox" data-addon-id="3">
+                            <div class="addon-info">
+                                <div class="addon-name">ไข่มุก</div>
+                                <div style="font-size: 12px; color: #999;">เคี้ยวหนึบ</div>
+                            </div>
+                            <div class="addon-price">+฿10</div>
+                        </div>
+                        <div class="addon-item" onclick="toggleAddon(this, 4)">
+                            <input type="checkbox" class="addon-checkbox" data-addon-id="4">
+                            <div class="addon-info">
+                                <div class="addon-name">ช็อกโกแลตซอส</div>
+                                <div style="font-size: 12px; color: #999;">เพิ่มรสหวาน</div>
+                            </div>
+                            <div class="addon-price">+฿10</div>
+                        </div>
+                        <div class="addon-item" onclick="toggleAddon(this, 5)">
+                            <input type="checkbox" class="addon-checkbox" data-addon-id="5">
+                            <div class="addon-info">
+                                <div class="addon-name">นมข้นหวาน</div>
+                                <div style="font-size: 12px; color: #999;">หวานมัน</div>
+                            </div>
+                            <div class="addon-price">+฿5</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Special Note -->
+                <div class="customize-section">
+                    <h4>📝 หมายเหตุพิเศษ</h4>
+                    <textarea class="note-input" id="specialNote" placeholder="ระบุความต้องการพิเศษ..."></textarea>
+                </div>
+
+                <!-- Quantity -->
+                <div class="customize-section">
+                    <h4>🔢 จำนวน</h4>
+                    <div class="quantity-controls" style="justify-content: center; border: none; padding: 0;">
+                        <button class="qty-btn" onclick="changeQuantity(-1)">−</button>
+                        <span class="quantity" id="modalQuantity" style="font-size: 24px; min-width: 50px;">1</span>
+                        <button class="qty-btn" onclick="changeQuantity(1)">+</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-modal btn-cancel" onclick="closeModal()">ยกเลิก</button>
+                <button class="btn-modal btn-add" onclick="addToCart()">
+                    เพิ่มลงตะกร้า • <span id="modalTotalPrice">฿0</span>
+                </button>
+            </div>
+        </div>
+    </div>
+<!-- Add Menu Modal -->
+<div id="addMenuModal" class="modal">
     <div class="modal-content">
-        <div class="modal-header">แก้ไขเมนู</div>
-        <form id="editForm">
-            <input type="hidden" id="editProductId">
-            <div class="form-group">
-                <label for="editName">ชื่อสินค้า</label>
-                <input type="text" id="editName" required>
+        <div class="modal-header">
+            <h3>เพิ่มเมนูใหม่</h3>
+        </div>
+
+        <div class="modal-body">
+            <div class="add-section">
+                <label for="menuName">ชื่อเมนู</label>
+                <input type="text" id="menuName" placeholder="ชื่อเมนู..." class="input-field">
             </div>
-            <div class="form-group">
-                <label for="editPrice">ราคา (฿)</label>
-                <input type="number" id="editPrice" step="0.01" required>
+
+            <div class="add-section">
+                <label for="menuPrice">ราคา (฿)</label>
+                <input type="number" id="menuPrice" placeholder="0.00" class="input-field" step="0.01">
             </div>
-            <div class="modal-buttons">
-                <button type="button" class="btn-modal btn-cancel" onclick="closeModal()">ยกเลิก</button>
-                <button type="submit" class="btn-modal btn-save">บันทึก</button>
+
+            <div class="add-section">
+                <label for="menuImage">รูปภาพเมนู</label>
+                <input type="file" id="menuImage" accept="image/*" class="input-field">
             </div>
-        </form>
+            <!-- Ingredient Selection -->
+            <div class="add-section">
+                <h4>วัตถุดิบ</h4>
+                <div id="ingredientList">
+                    <div class="ingredient-item" th:each="ing : ${ingredients}">
+                        <input type="checkbox" class="ingredient-checkbox" th:attr="data-id=${ing.id}">
+                        <label th:text="${ing.name}">วัตถุดิบ</label>
+                        <input type="number" class="ingredient-qty" min="0" step="0.01" placeholder="จำนวน" th:attr="data-unit=${ing.unit}">
+                        <span th:text="${ing.unit}">หน่วย</span>
+                    </div>
+                </div>
+            </div>
+        <div class="modal-footer">
+            <button class="btn-modal btn-cancel" onclick="closeAddMenuModal()">ยกเลิก</button>
+            <button class="btn-modal btn-add" onclick="submitNewMenu()">เพิ่มเมนู</button>
+        </div>
     </div>
 </div>
 
-<script th:inline="javascript">
-    let editMode = false;
 
-    function toggleEditMode() {
-        editMode = !editMode;
-        const btn = document.querySelector('.btn-edit-menu');
-        const btnText = document.getElementById('editModeText');
-        const menuGrid = document.getElementById('menuGrid');
-
-        if (editMode) {
-            btn.style.background = 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)';
-            btnText.textContent = 'ออกจากโหมดแก้ไข';
-            menuGrid.classList.add('edit-mode');
-
-            // Change click handlers
-            document.querySelectorAll('.menu-item').forEach(item => {
-                item.onclick = function() {
-                    openEditModal(this);
-                };
-            });
-        } else {
-            btn.style.background = 'linear-gradient(135deg, #f093fb 0%, #f5576c 100%)';
-            btnText.textContent = 'แก้ไขเมนู';
-            menuGrid.classList.remove('edit-mode');
-
-            // Restore original click handlers
-            document.querySelectorAll('.menu-item').forEach(item => {
-                item.onclick = function() {
-                    addToCart(this.getAttribute('data-id'));
-                };
-            });
-        }
-    }
-
-    function openEditModal(itemElement) {
-        const id = itemElement.getAttribute('data-id');
-        const name = itemElement.getAttribute('data-name');
-        const price = itemElement.getAttribute('data-price');
-
-        document.getElementById('editProductId').value = id;
-        document.getElementById('editName').value = name;
-        document.getElementById('editPrice').value = price;
-        document.getElementById('editModal').style.display = 'block';
-    }
-
-    function closeModal() {
-        document.getElementById('editModal').style.display = 'none';
-    }
-
-    document.getElementById('editForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-
-        const id = document.getElementById('editProductId').value;
-        const name = document.getElementById('editName').value;
-        const price = document.getElementById('editPrice').value;
-
-        try {
-            const response = await fetch('/api/products/' + id, {
-                method: 'PUT',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ name, price })
-            });
-
-            if (response.ok) {
-                alert('แก้ไขเมนูสำเร็จ!');
-                closeModal();
-                location.reload();
-            } else {
-                alert('เกิดข้อผิดพลาดในการแก้ไขเมนู');
-            }
-        } catch (error) {
-            console.error('Error:', error);
-            alert('ไม่สามารถเชื่อมต่อกับเซิร์ฟเวอร์ได้');
-        }
-    });
-
-    // Close modal when clicking outside
-    window.onclick = function(event) {
-        const modal = document.getElementById('editModal');
-        if (event.target == modal) {
-            closeModal();
-        }
-    };
-
-    // Add to cart function
-    async function addToCart(productId) {
-        if (editMode) return;
-
-        const res = await fetch('/cart/add', {
-            method: 'POST',
-            headers: {'Content-Type': 'application/x-www-form-urlencoded'},
-            body: new URLSearchParams({productId: productId})
-        });
-        const data = await res.json();
-        if(data.ok){
-            location.reload();
-        } else {
-            alert(data.msg || 'เกิดข้อผิดพลาด');
-        }
-    }
-
-    // Checkout function
-    async function checkout() {
-        const res = await fetch('/checkout', {method: 'POST'});
-        const data = await res.json();
-        if(data.ok){
-            alert('ชำระเงินสำเร็จ!\nยอดรวม: ฿' + data.total);
-            location.reload();
-        } else {
-            alert(data.msg || 'ไม่สามารถชำระเงินได้');
-        }
-    }
-
-    // Initialize click handlers on page load
-    document.addEventListener('DOMContentLoaded', function() {
-        document.querySelectorAll('.menu-item').forEach(item => {
-            item.onclick = function() {
-                addToCart(this.getAttribute('data-id'));
-            };
-        });
-    });
-</script>
+<script th:src="@{/js/script.js}"></script>
 </body>
 </html>
